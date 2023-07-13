@@ -1,6 +1,15 @@
+import { useState } from 'react'
 import { useNavigation } from '@react-navigation/native'
-import { VStack, Heading, Center, ScrollView } from 'native-base'
+import { VStack, Heading, Center, ScrollView , useToast} from 'native-base'
 import { useForm, Controller } from 'react-hook-form'
+import { yupResolver } from '@hookform/resolvers/yup'
+import * as yup from 'yup'
+
+import { useAuth } from '@hooks/useAuth'
+
+import { api } from '@services/api'
+
+import { AppError } from '@utils/AppError'
 
 import {Input} from '@components/Input'
 import { Button } from '@components/Button'
@@ -12,17 +21,37 @@ type FormDataProps = {
   password_confirm: string
 }
 
-export function SignUp(){
+const signUpSchema = yup.object({
+  name: yup.string().required('Informe o nome.'),
+  email: yup.string().required('Informe o e-mail.').email('E-mail inválido.'),
+  password: yup.string().required('Informe a senha.').min(6, 'A senha deve ter pelo menos 6 digitos.'),
+  password_confirm: yup.string().required('Confirme a senha.').oneOf([yup.ref('password')], 'A confirmação de senha não confere.'),
+});
 
-  const { control, handleSubmit } = useForm<FormDataProps>()
+export function SignUp(){
+  const [isLoading, setIsLoading] = useState(false)
+
+  const toast = useToast()
+  const { singIn } = useAuth()
+
+  const { control, handleSubmit, formState: { errors } } = useForm<FormDataProps>({
+    resolver: yupResolver(signUpSchema)
+  })
 
   const navigation = useNavigation()
   function handleGoBack() {
     navigation.goBack()
   }
 
-  function handleSignUp({ name, email, password, password_confirm }: FormDataProps) {
-    console.log({ name, email, password, password_confirm })
+  async function handleSignUp({ name, email, password }: FormDataProps) {
+    try {
+      setIsLoading(true)
+      await api.post('/users', { name, email, password })
+      await singIn(email, password)
+    } catch (error) {
+      setIsLoading(false)
+      const isAppError = error instanceof AppError
+    }
   }
 
   return (
@@ -41,6 +70,7 @@ export function SignUp(){
                   placeholder='Nome'
                   onChangeText={onChange}
                   value={value}
+                  errorMessage={errors.name?.message}
                 />
               )}
             />
@@ -55,6 +85,7 @@ export function SignUp(){
                   autoCapitalize='none'
                   onChangeText={onChange}
                   value={value}
+                  errorMessage={errors.email?.message}
                 />
               )}
             />
@@ -69,6 +100,7 @@ export function SignUp(){
                   autoCapitalize='none'
                   onChangeText={onChange}
                   value={value}
+                  errorMessage={errors.password?.message}
                 />
               )}
             />
@@ -83,6 +115,7 @@ export function SignUp(){
                   autoCapitalize='none'
                   onChangeText={onChange}
                   value={value}
+                  errorMessage={errors.password_confirm?.message}
                   onSubmitEditing={handleSubmit(handleSignUp)}
                   returnKeyType='send'
                 />
@@ -90,14 +123,15 @@ export function SignUp(){
             />
 
             <Button title='Criar e acessar'
-              onPress={handleSubmit(handleSignUp)} 
+              onPress={handleSubmit(handleSignUp)}
+              isLoading={isLoading} 
             />
           </Center>
 
           <Button
             title='Voltar para o login'
             variant='outline'
-            mt={24}
+            mt={12}
             onPress={handleGoBack}
           />
         </VStack>
